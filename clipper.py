@@ -3,7 +3,7 @@ Clips GTA 6 — récupère les meilleurs clips Twitch des chaînes autorisées,
 les passe en vertical 9:16 avec sous-titres FR, et les publie sur TikTok et YouTube Shorts via Buffer.
 
 Variables d'environnement (secrets GitHub) :
-  TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, BUFFER_API_KEY
+  BUFFER_API_KEY (obligatoire) ; TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET (facultatifs, API officielle)
 Réglages optionnels :
   LOOKBACK_HOURS (défaut 24), MAX_CLIPS_PER_RUN (défaut 6), MIN_VIEWS (défaut 5),
   ONLY_GTA6 (défaut 1), WHISPER_MODEL (défaut "small")
@@ -59,6 +59,48 @@ def read_channels():
         if line:
             out.append(line.split("/")[-1].lower())
     return out
+
+
+def is_gta6(category):
+    c = (category or "").lower()
+    return "grand theft auto vi" in c or "gta vi" in c or "gta 6" in c or "grand theft auto 6" in c
+
+
+def fetch_clips_public(logins, game_cache):
+    """Sans compte Twitch : lit les pages publiques « Clips » des chaînes (via yt-dlp)."""
+    import yt_dlp
+    rng = "24hr" if LOOKBACK_HOURS <= 24 else ("7d" if LOOKBACK_HOURS <= 168 else "30d")
+    since = (datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)).timestamp()
+    flat = yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "extract_flat": True,
+                             "skip_download": True, "playlistend": 20})
+    full = yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True, "skip_download": True})
+    clips = []
+    for login in logins:
+        try:
+            info = flat.extract_info(f"https://www.twitch.tv/{login}/clips?filter=clips&range={rng}", download=False)
+        except Exception as e:
+            print(f"⚠️  {login} : impossible de lire les clips ({e})")
+            continue
+        for e in info.get("entries") or []:
+            if not e or not e.get("url") or (e.get("view_count") or 0) < MIN_VIEWS:
+                continue
+            if e.get("timestamp") and e["timestamp"] < since:
+                continue
+            cid = str(e.get("id") or e["url"].rstrip("/").split("/")[-1])
+            if ONLY_GTA6:
+                if cid not in game_cache:
+                    try:
+                        cats = full.extract_info(e["url"], download=False).get("categories") or []
+                        game_cache[cid] = cats[0] if cats else ""
+                    except Exception:
+                        game_cache[cid] = ""
+                if not is_gta6(game_cache[cid]):
+                    continue
+            clips.append({"id": cid, "url": e["url"], "title": e.get("title") or "",
+                          "broadcaster_name": login, "view_count": e.get("view_count") or 0,
+                          "duration": float(e.get("duration") or 30)})
+    clips.sort(key=lambda c: c["view_count"], reverse=True)
+    return clips
 
 
 def fetch_clips(cid, token, logins):
@@ -339,12 +381,13 @@ def load_state():
 
 
 def save_state(state):
-    STATE_FILE.write_text(json.dumps({k: v[-2000:] for k, v in state.items()}, indent=0))
+    out = {k: (v[-2000:] if isinstance(v, list) else dict(list(v.items())[-3000:])) for k, v in state.items()}
+    STATE_FILE.write_text(json.dumps(out, indent=0, ensure_ascii=False))
 
 
 def main():
     env = {k: os.getenv(k) for k in ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET", "BUFFER_API_KEY"]}
-    missing = [k for k, v in env.items() if not v]
+    missing = [k for k in ["BUFFER_API_KEY"] if not env[k]]
     if missing:
         sys.exit(f"Secrets manquants : {', '.join(missing)}")
     key = env["BUFFER_API_KEY"]
@@ -362,8 +405,13 @@ def main():
 
     clean_old_media()
     state = load_state()
-    token = twitch_token(env["TWITCH_CLIENT_ID"], env["TWITCH_CLIENT_SECRET"])
-    clips = fetch_clips(env["TWITCH_CLIENT_ID"], token, logins)
+    if env["TWITCH_CLIENT_ID"] and env["TWITCH_CLIENT_SECRET"]:  # option : API officielle Twitch
+        token = twitch_token(env["TWITCH_CLIENT_ID"], env["TWITCH_CLIENT_SECRET"])
+        clips = fetch_clips(env["TWITCH_CLIENT_ID"], token, logins)
+    else:                                                          # par défaut : sans compte Twitch
+        clips = fetch_clips_public(logins, state.setdefault("games", {}))
+    print(f"{len(clips)} clip(s) GTA 6 trouvés sur les dernières {LOOKBACK_HOURS} h.")
+    save_state(state)
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)

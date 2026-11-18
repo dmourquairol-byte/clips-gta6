@@ -1,7 +1,7 @@
 # Clips GTA 6 — publication automatique sur TikTok et YouTube Shorts (0 €)
 
 Toutes les heures, GitHub :
-1. récupère les clips Twitch les plus vus des chaînes de `channels.txt`, filtrés sur GTA VI ;
+1. récupère (sans compte Twitch) les clips les plus vus des chaînes de `channels.txt`, filtrés sur GTA VI ;
 2. les passe en vertical 9:16 (fond flouté) avec des sous-titres français façon TikTok et le crédit du streamer ;
 3. met les clips seuls dans la file **YouTube Shorts**, et des **compilations de plus d’une minute** (avec une accroche au début) dans la file **TikTok**, via Buffer, qui publie aux horaires que tu as choisis.
 
@@ -15,17 +15,14 @@ Tu n'as rien à faire tourner chez toi, et tout est gratuit.
 - Dans Buffer → *Settings* → *Posting schedule* : choisis les horaires de publication, par exemple 12h, 18h et 21h.
 - Récupère ta clé sur **publish.buffer.com/settings/api** (« Get API Key »).
 
-### 2. Twitch (récupération des clips)
-- Sur dev.twitch.tv/console → *Register Your Application* : OAuth Redirect `http://localhost`, catégorie « Application Integration », client « Confidential ».
-- Note le **Client ID** et crée un **Client Secret** (« New Secret »).
+### 2. Twitch
+Rien à faire : aucun compte Twitch n'est nécessaire. Le script lit les pages publiques « Clips » des chaînes.
+(Facultatif : avec une appli développeur Twitch, ajoute les secrets `TWITCH_CLIENT_ID` et `TWITCH_CLIENT_SECRET` pour passer par l'API officielle.)
 
 ### 3. GitHub (le moteur)
 - Crée un dépôt **public** et mets-y tous ces fichiers. Sur un dépôt public, GitHub Actions est gratuit et illimité.
 - Remplis `channels.txt` : une chaîne Twitch autorisée par ligne.
-- Dans *Settings* → *Secrets and variables* → *Actions* → *New repository secret*, ajoute ces 3 secrets :
-  - `TWITCH_CLIENT_ID`
-  - `TWITCH_CLIENT_SECRET`
-  - `BUFFER_API_KEY`
+- Dans *Settings* → *Secrets and variables* → *Actions* → *New repository secret*, ajoute le secret `BUFFER_API_KEY`.
 - Dans *Settings* → *Actions* → *General* → *Workflow permissions*, choisis **Read and write permissions**.
 - Pour un premier essai : onglet *Actions* → « Clips GTA 6 » → *Run workflow*.
 
