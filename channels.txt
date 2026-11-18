@@ -1,0 +1,6 @@
+# Une chaîne Twitch par ligne (pseudo ou lien), uniquement celles qui ont donné leur accord.
+anyme023
+jltomy
+michou
+kamet0
+squeezie
